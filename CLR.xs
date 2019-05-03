@@ -19,7 +19,7 @@ namespace XS {
     String^                     SvToString(SV* sv);
     array<Object^>^             SvToArray(SV* sv);
     Reflection::BindingFlags    GetBindingFlags(String^ member);
-    Type^                       GetType(String^ name);
+    Type^                       GetType(String^ assemblyQualifiedTypeName);
     void                        SvSetInstance(SV* sv, Object^ value);
     Object^                     SvGetInstance(SV* sv);
     void                        SvSetReturn(SV* sv, Object^ value);
@@ -696,7 +696,7 @@ namespace XS {
         static void Add(Type^ type);
         static Reflection::Assembly^ Load(String^ name);
         static Reflection::Assembly^ LoadFrom(String^ filename);
-        static Type^ GetType(String^ tname);
+        static Type^ GetType(String^ typeName);
 
     };
 
@@ -853,10 +853,10 @@ namespace XS {
 
     }
 
-    Type^ GetType(String^ tname) {
-        Type^ type = Type::GetType(tname);
+    Type^ GetType(String^ assemblyQualifiedTypeName) {
+        Type^ type = Type::GetType(assemblyQualifiedTypeName);
         if (nullptr == type) {
-            type = Assembly::GetType(tname);
+            type = Assembly::GetType(assemblyQualifiedTypeName);
         }
         return type;
     }
@@ -891,16 +891,25 @@ namespace XS {
         return assembly;
     }
 
-    Type^ Assembly::GetType(String^ tname) {
+    Type^ Assembly::GetType(String^ typeName) {
 
         Type^ type;
 
-        if ( TypeCache->TryGetValue(tname, type) ) {
+        if ( TypeCache->TryGetValue(typeName, type) ) {
             return type;
         }
 
+        int commaIndex = typeName->IndexOf(',');
+        if (commaIndex > 0)
+        {
+            // Unlike Type.GetType(), Assembly.GetType() does not expect/want an assembly-qualified type name
+            // TODO: ideally we would update the callers to pass the right string here rather than relying on mildly-hacky
+            // string manipulation
+            typeName = typeName->Substring(0, commaIndex);
+        }
+
         for each(Reflection::Assembly^ assembly in AsmCache) {
-            type = assembly->GetType(tname);
+            type = assembly->GetType(typeName);
             if (nullptr != type) {
                 Add(type);
                 return type;
