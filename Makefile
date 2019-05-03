@@ -16,7 +16,7 @@
 #     BUILD_REQUIRES => {  }
 #     CC => q[cl -clr -TP]
 #     CONFIGURE_REQUIRES => {  }
-#     INC => q[ "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\ATLMFC\include"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\include"  "-IC:\Program Files (x86)\Windows Kits\NETFXSDK\4.6.1\include\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\ucrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\shared"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\winrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\cppwinrt"  "-IC:\Program Files\Microsoft Visual Studio 8\VC\PlatformSDK\Include" ]
+#     INC => q[ "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\ATLMFC\include"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\include"  "-IC:\Program Files (x86)\Windows Kits\NETFXSDK\4.6.1\include\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\ucrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\shared"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\winrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\cppwinrt"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\ATLMFC\include"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\include"  "-IC:\Program Files (x86)\Windows Kits\NETFXSDK\4.6.1\include\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\ucrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\shared"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\winrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\cppwinrt"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\ATLMFC\include"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\include"  "-IC:\Program Files (x86)\Windows Kits\NETFXSDK\4.6.1\include\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\ucrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\shared"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\winrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\cppwinrt"  "-IC:\Program Files\Microsoft Visual Studio 8\VC\PlatformSDK\Include" ]
 #     LIBS => [q[-lmscoree -lmsvcmrt]]
 #     LICENSE => q[perl]
 #     NAME => q[Win32::CLR]
@@ -41,8 +41,8 @@ DLSRC = dl_win32.xs
 EXE_EXT = .exe
 FULL_AR = 
 LD = link
-LDDLFLAGS = -dll -nologo -nodefaultlib -debug -opt:ref,icf -ltcg  -libpath:"C:\Perl64\lib\CORE"  -machine:AMD64
-LDFLAGS = -nologo -nodefaultlib -debug -opt:ref,icf -ltcg  -libpath:"C:\Perl64\lib\CORE"  -machine:AMD64
+LDDLFLAGS = -dll -nologo  -debug -opt:ref,icf -ltcg  -libpath:"C:\Perl64\lib\CORE"  -machine:AMD64
+LDFLAGS = -nologo  -debug -opt:ref,icf -ltcg  -libpath:"C:\Perl64\lib\CORE"  -machine:AMD64
 LIBC = msvcrt.lib
 LIB_EXT = .lib
 OBJ_EXT = .obj
@@ -162,7 +162,7 @@ BASEEXT = CLR
 PARENT_NAME = Win32
 DLBASE = $(BASEEXT)
 VERSION_FROM = lib/Win32/CLR.pm
-INC =  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\ATLMFC\include"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\include"  "-IC:\Program Files (x86)\Windows Kits\NETFXSDK\4.6.1\include\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\ucrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\shared"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\winrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\cppwinrt"  "-IC:\Program Files\Microsoft Visual Studio 8\VC\PlatformSDK\Include" 
+INC =  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\ATLMFC\include"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\include"  "-IC:\Program Files (x86)\Windows Kits\NETFXSDK\4.6.1\include\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\ucrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\shared"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\winrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\cppwinrt"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\ATLMFC\include"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\include"  "-IC:\Program Files (x86)\Windows Kits\NETFXSDK\4.6.1\include\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\ucrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\shared"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\winrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\cppwinrt"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\ATLMFC\include"  "-IC:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Tools\MSVC\14.16.27023\include"  "-IC:\Program Files (x86)\Windows Kits\NETFXSDK\4.6.1\include\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\ucrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\shared"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\um"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\winrt"  "-IC:\Program Files (x86)\Windows Kits\10\include\10.0.17763.0\cppwinrt"  "-IC:\Program Files\Microsoft Visual Studio 8\VC\PlatformSDK\Include" 
 OBJECT = $(BASEEXT)$(OBJ_EXT)
 LDFROM = $(OBJECT)
 LINKTYPE = dynamic
@@ -280,6 +280,7 @@ DISTVNAME = Win32-CLR-0.03
 
 # --- MakeMaker macro section:
 
+BBERGER_DEBUG_MODE = 1;
 
 # --- MakeMaker depend section:
 
@@ -287,7 +288,15 @@ DISTVNAME = Win32-CLR-0.03
 # --- MakeMaker cflags section:
 
 CCFLAGS = -nologo -GF -W3 -MD -Zi -DNDEBUG -Ox -GL -fp:precise -DWIN32 -D_CONSOLE -DNO_STRICT -DWIN64 -DCONSERVATIVE -DPERL_TEXTMODE_SCRIPTS -DUSE_SITECUSTOMIZE -DPERL_IMPLICIT_CONTEXT -DPERL_IMPLICIT_SYS -DUSE_PERLIO
+
+!IFDEF BBERGER_DEBUG_MODE
+CCFLAGS = $(CCFLAGS) /DEBUG 
+!ENDIF
+
+!IFNDEF BBERGER_DEBUG_MODE
 OPTIMIZE = -MD -Zi -DNDEBUG -Ox -GL -fp:precise
+!ENDIF
+
 PERLTYPE = 
 
 
