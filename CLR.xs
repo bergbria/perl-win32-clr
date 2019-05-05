@@ -8,11 +8,19 @@ using namespace System;
 typedef Object^ Win32_CLR;
 typedef Object^ CLR_Object;
 typedef String^ CLR_String;
+
+// The numbers at the end of these types indicate how many arguments in the
+// perl sub signature precede the array (make sure to count 'self')
 typedef array<Object^>^ CLR_Param1;
 typedef array<Object^>^ CLR_Param2;
 typedef array<Object^>^ CLR_Param3;
 typedef array<Object^>^ CLR_Param4;
 typedef array<Object^>^ CLR_Param5;
+typedef array<String^>^ CLR_StringParam1;
+typedef array<String^>^ CLR_StringParam2;
+typedef array<String^>^ CLR_StringParam3;
+typedef array<String^>^ CLR_StringParam4;
+typedef array<String^>^ CLR_StringParam5;
 
 namespace XS {
 
@@ -26,6 +34,30 @@ namespace XS {
     void                        SvSetString(SV* sv, String^ value);
     Object^                     InvokeOp(String^ name, Object^ left, Object^ right, bool reverse);
     Object^                     InvokeMember(Object^ target, String^ tname, String^ name, String^ option, array<Object^>^ params);
+    Object^                     InvokeMember(Object^ target, String^ tname, String^ name, Reflection::BindingFlags flags, array<Object^>^ params);
+    Reflection::MethodInfo^     CreateInstanceMethodInfo(String^ tname, String^ name, array<String^>^ paramTypeNames);
+    Object^                     InvokeMethodInfo(Object^ methodInfo, Object^ instance, array<Object^>^ params);
+
+    ref class BindingFlagsCache {
+    public:
+        static BindingFlagsCache();
+        static Reflection::BindingFlags CreateInstanceBindingFlags;
+        static Reflection::BindingFlags InstanceInvokeMethodBindingFlags;
+        static Reflection::BindingFlags StaticInvokeMethodBindingFlags;
+        static Reflection::BindingFlags InstanceGetFieldBindingFlags;
+        static Reflection::BindingFlags StaticGetFieldBindingFlags;
+        static Reflection::BindingFlags InstanceSetFieldBindingFlags;
+        static Reflection::BindingFlags StaticSetFieldBindingFlags;
+        static Reflection::BindingFlags InstanceGetPropertyBindingFlags;
+        static Reflection::BindingFlags StaticGetPropertyBindingFlags;
+        static Reflection::BindingFlags InstanceSetPropertyBindingFlags;
+        static Reflection::BindingFlags StaticSetPropertyBindingFlags;
+        static Reflection::BindingFlags InstanceGetValueBindingFlags;
+        static Reflection::BindingFlags StaticGetValueBindingFlags;
+        static Reflection::BindingFlags InstanceSetValueBindingFlags;
+        static Reflection::BindingFlags StaticSetValueBindingFlags;
+    };
+
 
     ref class SvPointer {
 
@@ -822,6 +854,9 @@ namespace XS {
             return;
         }
 
+        // TODO: can this handle arrays?
+        // http://blogs.perl.org/users/steve_bertrand/2017/01/send-in-a-perl-aref-to-c-get-back-a-perl-array-and-using-the-generated-xs.html
+        // https://stackoverflow.com/questions/46719061/perl-xs-return-perl-array-from-c-array
         switch(code_from) {
             case TypeCode::Boolean:
                 SvSetSV( sv, boolSV( safe_cast<Boolean>(value) ) );
@@ -859,6 +894,24 @@ namespace XS {
             type = Assembly::GetType(assemblyQualifiedTypeName);
         }
         return type;
+    }
+
+    static BindingFlagsCache::BindingFlagsCache() {
+        CreateInstanceBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, CreateInstance, Instance");
+        InstanceInvokeMethodBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, InvokeMethod, OptionalParamBinding, Instance");
+        StaticInvokeMethodBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, InvokeMethod, OptionalParamBinding, Static");
+        InstanceGetFieldBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, GetField, Instance");
+        StaticGetFieldBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, GetField, Static");
+        InstanceSetFieldBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, SetField, Instance");
+        StaticSetFieldBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, SetField, Static");
+        InstanceGetPropertyBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, GetProperty, Instance");
+        StaticGetPropertyBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, GetProperty, Static");
+        InstanceSetPropertyBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, SetProperty, Instance");
+        StaticSetPropertyBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, SetProperty, Static");
+        InstanceGetValueBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, GetProperty, GetField, Instance");
+        StaticGetValueBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, GetProperty, GetField, Static");
+        InstanceSetValueBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, SetProperty, SetField, Instance");
+        StaticSetValueBindingFlags = XS::GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, SetProperty, SetField, Static");
     }
 
     static Assembly::Assembly() {
@@ -1033,10 +1086,33 @@ namespace XS {
 
     Object^ InvokeMember(Object^ target, String^ tname, String^ name, String^ option, array<Object^>^ params) {
         Reflection::BindingFlags flags;
-        Type^ type = XS::GetType(tname);
         String^ target_type = nullptr == target ? ", Static" : ", Instance";
         flags = GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, " + option + target_type);
+        return InvokeMember(target, tname, name, flags, params);
+    }
+
+    Object^ InvokeMember(Object^ target, String^ tname, String^ name, Reflection::BindingFlags flags, array<Object^>^ params) {
+        Type^ type = XS::GetType(tname);
         return type->InvokeMember(name, flags, gcnew XS::Binder(), target, params);
+    }
+
+    Reflection::MethodInfo^ CreateInstanceMethodInfo(String^ tname, String^ name, array<String^>^ paramTypeNames) {
+        Type^ type = XS::GetType(tname);
+        int numParams = paramTypeNames == nullptr ? 0 : paramTypeNames->Length;
+        array<Type^>^ paramTypeList = gcnew array<Type^>(numParams);
+        for (int i = 0; i < numParams; i++) {
+            String^ paramTypeName = paramTypeNames[i];
+            // String^ paramTypeName = static_cast<String^>(paramTypeNames[i]);
+            paramTypeList[i] = XS::GetType(paramTypeName);
+        }
+
+        // Reflection::BindingFlags flags = GetBindingFlags("Public, IgnoreCase, FlattenHierarchy, InvokeMethod, OptionalParamBinding, Instance");
+        // return type->GetMethod(name, flags, gcnew XS::Binder(), paramTypeList, nullptr);
+        return type->GetMethod(name, paramTypeList);
+    }
+
+    Object^ InvokeMethodInfo(Object^ methodInfo, Object^ instance, array<Object^>^ params) {
+        return static_cast<Reflection::MethodInfo^>(methodInfo)->Invoke(instance, Reflection::BindingFlags::Default, gcnew XS::Binder(), params, nullptr);
     }
 
     Object^ InvokeOp(String^ name, Object^ left, Object^ right, bool reverse) {
@@ -1054,7 +1130,7 @@ CLR_Object
 _create_instance(Win32_CLR self, CLR_String tname, CLR_Param2 params = nullptr, ...)
 CODE:
     try {
-        RETVAL = XS::InvokeMember(self, tname, "", "CreateInstance, Instance", params);
+        RETVAL = XS::InvokeMember(self, tname, "", XS::BindingFlagsCache::CreateInstanceBindingFlags, params);
     }
     catch (Exception^ ex) {
         SV* err;
@@ -1077,7 +1153,38 @@ CLR_Object
 _call_method(Win32_CLR self, CLR_String tname, CLR_String name, CLR_Param3 params = nullptr, ...)
 CODE:
     try {
-        RETVAL = XS::InvokeMember(self, tname, name, "InvokeMethod, OptionalParamBinding", params);
+        auto flags = self == nullptr ? XS::BindingFlagsCache::StaticInvokeMethodBindingFlags : XS::BindingFlagsCache::InstanceInvokeMethodBindingFlags;
+        RETVAL = XS::InvokeMember(self, tname, name, flags, params);
+    }
+    catch (Exception^ ex) {
+        SV* err;
+        err = get_sv("@", TRUE);
+        XS::SvSetInstance(err, ex);
+        croak(NULL);
+    }
+OUTPUT:
+    RETVAL
+
+CLR_Object
+_bind_method_info(Win32_CLR self, CLR_String tname, CLR_String name, CLR_StringParam3 params = nullptr, ...)
+CODE:
+    try {
+        RETVAL = XS::CreateInstanceMethodInfo(tname, name, params);
+    }
+    catch (Exception^ ex) {
+        SV* err;
+        err = get_sv("@", TRUE);
+        XS::SvSetInstance(err, ex);
+        croak(NULL);
+    }
+OUTPUT:
+    RETVAL
+
+CLR_Object
+_call_method_info(Win32_CLR methodInfo, Win32_CLR instance, CLR_Param2 params = nullptr, ...)
+CODE:
+    try {
+        RETVAL = XS::InvokeMethodInfo(methodInfo, instance, params);
     }
     catch (Exception^ ex) {
         SV* err;
@@ -1120,7 +1227,8 @@ CLR_Object
 _get_field(Win32_CLR self, CLR_String tname, CLR_String name, CLR_Param3 params = nullptr, ...)
 CODE:
     try {
-        RETVAL = XS::InvokeMember(self, tname, name, "GetField", params);
+        auto flags = self == nullptr ? XS::BindingFlagsCache::StaticGetFieldBindingFlags : XS::BindingFlagsCache::InstanceGetFieldBindingFlags;
+        RETVAL = XS::InvokeMember(self, tname, name, flags, params);
     }
     catch (Exception^ ex) {
         SV* err;
@@ -1135,7 +1243,8 @@ void
 _set_field(Win32_CLR self, CLR_String tname, CLR_String name, CLR_Param3 params = nullptr, ...)
 CODE:
     try {
-        XS::InvokeMember(self, tname, name, "SetField", params);
+        auto flags = self == nullptr ? XS::BindingFlagsCache::StaticSetFieldBindingFlags : XS::BindingFlagsCache::InstanceSetFieldBindingFlags;
+        XS::InvokeMember(self, tname, name, flags, params);
     }
     catch (Exception^ ex) {
         SV* err;
@@ -1148,7 +1257,8 @@ CLR_Object
 _get_property(Win32_CLR self, CLR_String tname, CLR_String name, CLR_Param3 params = nullptr, ...)
 CODE:
     try {
-        RETVAL = XS::InvokeMember(self, tname, name, "GetProperty", params);
+        auto flags = self == nullptr ? XS::BindingFlagsCache::StaticGetPropertyBindingFlags : XS::BindingFlagsCache::InstanceGetPropertyBindingFlags;
+        RETVAL = XS::InvokeMember(self, tname, name, flags, params);
     }
     catch (Exception^ ex) {
         SV* err;
@@ -1163,7 +1273,8 @@ void
 _set_property(Win32_CLR self, CLR_String tname, CLR_String name, CLR_Param3 params = nullptr, ...)
 CODE:
     try {
-        XS::InvokeMember(self, tname, name, "SetProperty", params);
+        auto flags = self == nullptr ? XS::BindingFlagsCache::StaticSetPropertyBindingFlags : XS::BindingFlagsCache::InstanceSetPropertyBindingFlags;
+        XS::InvokeMember(self, tname, name, flags, params);
     }
     catch (Exception^ ex) {
         SV* err;
@@ -1176,7 +1287,8 @@ CLR_Object
 _get_value(Win32_CLR self, CLR_String tname, CLR_String name, CLR_Param3 params = nullptr, ...)
 CODE:
     try {
-        RETVAL = XS::InvokeMember(self, tname, name, "GetProperty, GetField", params);
+        auto flags = self == nullptr ? XS::BindingFlagsCache::StaticGetValueBindingFlags : XS::BindingFlagsCache::InstanceGetValueBindingFlags;
+        RETVAL = XS::InvokeMember(self, tname, name, flags, params);
     }
     catch (Exception^ ex) {
         SV* err;
@@ -1191,7 +1303,8 @@ void
 _set_value(Win32_CLR self, CLR_String tname, CLR_String name, CLR_Param3 params = nullptr, ...)
 CODE:
     try {
-        XS::InvokeMember(self, tname, name, "SetProperty, SetField", params);
+        auto flags = self == nullptr ? XS::BindingFlagsCache::StaticSetValueBindingFlags : XS::BindingFlagsCache::InstanceSetValueBindingFlags;
+        XS::InvokeMember(self, tname, name, flags, params);
     }
     catch (Exception^ ex) {
         SV* err;

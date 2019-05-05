@@ -58,6 +58,22 @@ sub parse_method {
     return Win32::CLR::Parser->parse_method($method);
 }
 
+sub bind_method_info {
+    my $self = shift;
+    my $type = $self->parse_type( shift(@_));
+    my $methodName = shift;
+    my @paramTypes = map {$self->parse_type($_)} @_;
+    return $self->_bind_method_info($type, $methodName, @paramTypes);
+}
+
+sub call_method_info {
+    my $self = shift;
+    my $methodInfo = shift;
+    my $instance = shift;
+
+    return $self->_call_method_info($methodInfo, $instance, @_);
+}
+
 sub call_method {
     my $self = shift;
     my $type = ref($self) ? $self->get_qualified_type() : $self->parse_type( shift(@_) );

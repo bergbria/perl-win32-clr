@@ -8,6 +8,11 @@ CLR_Param2  T_CLR_PARAM
 CLR_Param3  T_CLR_PARAM
 CLR_Param4  T_CLR_PARAM
 CLR_Param5  T_CLR_PARAM
+CLR_StringParam1 T_CLR_STRING_PARAM
+CLR_StringParam2 T_CLR_STRING_PARAM
+CLR_StringParam3 T_CLR_STRING_PARAM
+CLR_StringParam4 T_CLR_STRING_PARAM
+CLR_StringParam5 T_CLR_STRING_PARAM
 
 bool T_CLR_BOOL
 
@@ -47,5 +52,14 @@ T_CLR_PARAM
         $var = gcnew array<Object^>(items - offset);
         for (int i = offset; i < items; i++) {
             ${var}[i - offset] = XS::SvGetInstance( ST(i) );
+        }
+    }
+
+T_CLR_STRING_PARAM
+    {
+        int offset = @{[$type =~ /(\d)$/]};
+        $var = gcnew array<String^>(items - offset);
+        for (int i = offset; i < items; i++) {
+            ${var}[i - offset] = XS::SvToString( ST(i) );
         }
     }
