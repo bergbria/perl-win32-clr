@@ -1358,6 +1358,47 @@ CODE:
 OUTPUT:
    RETVAL
 
+SV*
+_make_hash_shallow(Win32_CLR self)
+PREINIT:
+    HV* resultHash;
+CODE:
+    try {
+        resultHash = newHV();
+        RETVAL = newRV_noinc((SV*)resultHash);
+
+        auto type = self->GetType();
+        auto flags = XS::BindingFlagsCache::InstanceGetPropertyBindingFlags;
+        array<System::Reflection::PropertyInfo^>^ publicProperties = type->GetProperties(flags);
+
+        // TODO: extract common utility function for String^ -> char* conversion
+        Text::UTF8Encoding^ utf8_enc;
+        utf8_enc = gcnew Text::UTF8Encoding();
+
+        for each (System::Reflection::PropertyInfo^ propertyInfo in publicProperties) {
+            String^ propertyName = propertyInfo->Name;
+            Object^ propertyValue = propertyInfo->GetMethod->Invoke(self, nullptr);
+
+            SV* perlValue = newSV(0);
+            XS::SvSetReturn(perlValue, propertyValue);
+
+            array<Byte>^ utf8_bytes = utf8_enc->GetBytes(propertyName->ToString());
+            pin_ptr<Byte> utf8_ptr = &utf8_bytes[0];
+            const char* propertyNamePtr = reinterpret_cast<char*>(utf8_ptr);
+            U32 propertyNameLength = utf8_bytes->Length;
+
+            hv_store(resultHash, propertyNamePtr, propertyNameLength, perlValue, 0);
+        }
+    }
+    catch (Exception^ ex) {
+        SV* err;
+        err = get_sv("@", TRUE);
+        XS::SvSetInstance(err, ex);
+        croak(NULL);
+    }
+OUTPUT:
+   RETVAL
+
 CLR_Object
 load(SV* package, CLR_String name)
 CODE:

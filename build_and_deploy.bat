@@ -3,12 +3,12 @@ setlocal
 pushd %~dp0
 
 call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64
-del clr.c
-del CLR.obj
+rem del clr.c
+rem del CLR.obj
 nmake
 nmake install
-D:\temp\copyclr.bat
 
+rem D:\temp\copyclr.bat
 copy c:\perl64\site\lib\auto\Win32\CLR\CLR.dll %PkgPerl%\site\lib\auto\Win32\CLR\CLR.dll
 copy c:\perl64\site\lib\auto\Win32\CLR\CLR.exp %PkgPerl%\site\lib\auto\Win32\CLR\CLR.exp
 copy c:\perl64\site\lib\auto\Win32\CLR\CLR.lib %PkgPerl%\site\lib\auto\Win32\CLR\CLR.lib
