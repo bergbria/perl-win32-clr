@@ -97,6 +97,12 @@ sub enumerate_to_array {
     return $self->_enumerate_to_array();
 }
 
+sub make_deep_copy {
+    my $self = shift;
+
+    return $self->_enumerate_to_array();
+}
+
 sub enumerate_to_shallow_hash_array {
     my $self = shift;
 
@@ -107,6 +113,12 @@ sub make_hash_shallow {
     my $self = shift;
 
     return $self->_make_hash_shallow();
+}
+
+sub make_deep_perl_copy {
+    my $self = shift;
+
+    return $self->_make_deep_perl_copy();
 }
 
 sub call_method {

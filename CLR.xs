@@ -31,6 +31,7 @@ namespace XS {
     Reflection::BindingFlags    GetBindingFlags(String^ member);
     Type^                       GetType(String^ assemblyQualifiedTypeName);
     SV*                         MakeSV(Object^ value);
+    bool                        IsConvertibleToNativePerlType(Object^ obj);
     void                        SvSetInstance(SV* sv, Object^ value);
     Object^                     SvGetInstance(SV* sv);
     void                        SvSetReturn(SV* sv, Object^ value);
@@ -42,6 +43,7 @@ namespace XS {
     Object^                     InvokeMethodInfo(Object^ methodInfo, Object^ instance, array<Object^>^ params);
     SV*                         MakeShallowHashCopy(Object^ obj);
     SV*                         MakeShallowHashCopy(Object^ obj, XS::PropertyCollection^ propertyCollection);
+    SV*                         MakeDeepPerlCopy(Object^ obj);
 
     ref class BindingFlagsCache {
     public:
@@ -146,6 +148,20 @@ namespace XS {
 
     ref class PropertyCollection {
     public:
+        static PropertyCollection^ Get(Type^ type) {
+            PropertyCollection^ result;
+            if (!_cache->TryGetValue(type, result)) {
+                result = gcnew PropertyCollection(type);
+                _cache->Add(type, result);
+            }
+
+            return result;
+        }
+
+        static PropertyCollection() {
+            _cache = gcnew System::Collections::Generic::Dictionary<Type^, PropertyCollection^>();
+        }
+
          PropertyCollection(Type^ type) {
             auto flags = XS::BindingFlagsCache::InstanceGetPropertyBindingFlags;
             if (type->IsInterface) {
@@ -179,11 +195,16 @@ namespace XS {
             return _propertyInfos[propertyIndex]->GetMethod->Invoke(instance, nullptr);
          }
 
-         array<Byte>^ GetPropertyName(size_t propertyIndex) {
+         String^ GetPropertyName(size_t propertyIndex) {
+            return _propertyInfos[propertyIndex]->Name;
+         }
+
+         array<Byte>^ GetPropertyNameBytes(size_t propertyIndex) {
             return _propertyNameByteArrays[propertyIndex];
          }
 
      private:
+        static System::Collections::Generic::Dictionary<Type^, PropertyCollection^>^ _cache;
         array<System::Reflection::PropertyInfo^>^ _propertyInfos;
         array<array<Byte>^>^ _propertyNameByteArrays;
     };
@@ -904,6 +925,33 @@ namespace XS {
         sv_setref_iv(sv, "Win32::CLR", addr);
     }
 
+    bool IsConvertibleToNativePerlType(Object^ obj) {
+         if (nullptr == obj) {
+            return true;
+         }
+
+         auto typeCode = Type::GetTypeCode(obj->GetType());
+         switch(typeCode) {
+            case TypeCode::Boolean:
+            case TypeCode::SByte:
+            case TypeCode::Int16:
+            case TypeCode::Int32:
+            case TypeCode::Int64:
+            case TypeCode::Byte:
+            case TypeCode::UInt16:
+            case TypeCode::UInt32:
+            case TypeCode::UInt64:
+            case TypeCode::Single:
+            case TypeCode::Double:
+            case TypeCode::Decimal:
+            case TypeCode::Char:
+            case TypeCode::String:
+                return true;
+            default:
+                return false;
+         }
+    }
+
     void SvSetReturn(SV* sv, Object^ value) {
 
         if (nullptr == value) {
@@ -1195,7 +1243,7 @@ namespace XS {
     SV* MakeShallowHashCopy(Object^ obj, PropertyCollection^ propertyCollection) {
         HV* resultHash = newHV();
         for (size_t i = 0; i < propertyCollection->GetLength(); i++) {
-            array<Byte>^ propertyNameBytes = propertyCollection->GetPropertyName(i);
+            array<Byte>^ propertyNameBytes = propertyCollection->GetPropertyNameBytes(i);
             Object^ propertyValue = propertyCollection->GetPropertyValue(obj, i);
 
             pin_ptr<Byte> utf8_ptr = &propertyNameBytes[0];
@@ -1209,7 +1257,70 @@ namespace XS {
         SV* resultHashReference = newRV_noinc((SV*)resultHash);
         return resultHashReference;
     }
-    
+
+    // TODO: there's too much duplicated code in this function
+    SV* MakeDeepPerlCopy(Object^ obj) {
+        if (IsConvertibleToNativePerlType(obj)) {
+            return XS::MakeSV(obj);
+        }
+
+        Type^ type = obj->GetType();
+
+        auto dictionary = dynamic_cast<System::Collections::IDictionary^>(obj);
+        if (dictionary != nullptr) {
+            HV* resultHash = newHV();
+            if (dictionary->Count > 0) {
+                Type^ dictionaryInterface = type->GetInterface("IDictionary`2");
+                if (dictionaryInterface == nullptr) {
+                    // TODO: error
+                }
+
+                String^ keyTypeName = dictionaryInterface->GenericTypeArguments[0]->Name;
+                if (!keyTypeName->Equals("System.String")) {
+                    // TODO: error
+                }
+
+                for each (System::Collections::DictionaryEntry^ entry in dictionary) {
+                    auto keyBytes = XS::StringUtil::GetBytes(static_cast<String^>(entry->Key));
+                    pin_ptr<Byte> utf8_ptr = &keyBytes[0];
+                    const char* keyPtr = reinterpret_cast<char*>(utf8_ptr);
+
+                    SV* value = MakeDeepPerlCopy(entry->Value);
+                    hv_store(resultHash, keyPtr, keyBytes->Length, value, 0);
+                }
+            }
+
+            return newRV_noinc((SV*)resultHash);
+        }
+
+        auto enumerable = dynamic_cast<System::Collections::IEnumerable^>(obj);
+        if (enumerable != nullptr) {
+           // Props to https://stackoverflow.com/a/46719397 for helpful commentary on returning an array
+            auto perlArrayResult = newAV();
+            for each (Object^ member in enumerable) {
+                SV* element = MakeDeepPerlCopy(member);
+                av_push(perlArrayResult, element);
+            }
+            return newRV_noinc((SV*)perlArrayResult);
+        }
+
+        // This is another object
+        HV* resultHash = newHV();
+        auto propertyCollection = PropertyCollection::Get(type);
+        for (size_t i = 0; i < propertyCollection->GetLength(); i++) {
+            array<Byte>^ propertyNameBytes = propertyCollection->GetPropertyNameBytes(i);
+            Object^ propertyValue = propertyCollection->GetPropertyValue(obj, i);
+
+            pin_ptr<Byte> utf8_ptr = &propertyNameBytes[0];
+            const char* propertyNamePtr = reinterpret_cast<char*>(utf8_ptr);
+            U32 propertyNameLength = propertyNameBytes->Length;
+
+            SV* perlValue = MakeDeepPerlCopy(propertyValue);
+            hv_store(resultHash, propertyNamePtr, propertyNameLength, perlValue, 0);
+        }
+
+        return newRV_noinc((SV*)resultHash);
+    }
 }
 
 MODULE = Win32::CLR    PACKAGE = Win32::CLR
@@ -1498,6 +1609,20 @@ CODE:
 OUTPUT:
    RETVAL
 
+SV*
+_make_deep_perl_copy(Win32_CLR self)
+CODE:
+    try {
+        RETVAL = XS::MakeDeepPerlCopy(self);
+    }
+    catch (Exception^ ex) {
+        SV* err;
+        err = get_sv("@", TRUE);
+        XS::SvSetInstance(err, ex);
+        croak(NULL);
+    }
+OUTPUT:
+   RETVAL
 
 SV*
 _dictionary_to_hash(Win32_CLR self)
