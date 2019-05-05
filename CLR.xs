@@ -838,7 +838,7 @@ namespace XS {
     void SvSetString(SV* sv, String^ value) {
 
         array<Byte>^ utf8_bytes;
-        utf8_bytes = StringUtil::GetBytes( value->ToString() );
+        utf8_bytes = StringUtil::GetBytes( value );
 
         if (0 < utf8_bytes->Length) {
             pin_ptr<Byte> utf8_ptr = &utf8_bytes[0];
@@ -967,9 +967,6 @@ namespace XS {
             return;
         }
 
-        // TODO: can this handle arrays?
-        // http://blogs.perl.org/users/steve_bertrand/2017/01/send-in-a-perl-aref-to-c-get-back-a-perl-array-and-using-the-generated-xs.html
-        // https://stackoverflow.com/questions/46719061/perl-xs-return-perl-array-from-c-array
         switch(code_from) {
             case TypeCode::Boolean:
                 SvSetSV( sv, boolSV( safe_cast<Boolean>(value) ) );
@@ -1295,7 +1292,6 @@ namespace XS {
 
         auto enumerable = dynamic_cast<System::Collections::IEnumerable^>(obj);
         if (enumerable != nullptr) {
-           // Props to https://stackoverflow.com/a/46719397 for helpful commentary on returning an array
             auto perlArrayResult = newAV();
             for each (Object^ member in enumerable) {
                 SV* element = MakeDeepPerlCopy(member);
@@ -1533,7 +1529,6 @@ PREINIT:
     AV* perlArrayResult;
 CODE:
     try {
-        // Props to https://stackoverflow.com/a/46719397 for helpful commentary on returning an array
         perlArrayResult = newAV();
         RETVAL = newRV_noinc((SV*)perlArrayResult);
 
@@ -1541,7 +1536,6 @@ CODE:
         if (enumerable != nullptr)
         {
             for each (Object^ member in enumerable) {
-                // Initialize with size 0 because SvSetReturn will mutate it to contain whatever value is suitable
                 SV* perlMember = XS::MakeSV(member);
                 av_push(perlArrayResult, perlMember);
             }
@@ -1562,7 +1556,6 @@ PREINIT:
     AV* perlArrayResult;
 CODE:
     try {
-        // Props to https://stackoverflow.com/a/46719397 for helpful commentary on returning an array
         perlArrayResult = newAV();
         RETVAL = newRV_noinc((SV*)perlArrayResult);
 
