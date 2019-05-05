@@ -80,6 +80,12 @@ sub enumerate_to_array {
     return $self->_enumerate_to_array();
 }
 
+sub enumerate_to_shallow_hash_array {
+    my $self = shift;
+
+    return $self->_enumerate_to_shallow_hash_array();
+}
+
 sub make_hash_shallow {
     my $self = shift;
 

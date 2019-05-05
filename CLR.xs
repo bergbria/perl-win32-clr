@@ -24,10 +24,13 @@ typedef array<String^>^ CLR_StringParam5;
 
 namespace XS {
 
+    ref class PropertyCollection;
+
     String^                     SvToString(SV* sv);
     array<Object^>^             SvToArray(SV* sv);
     Reflection::BindingFlags    GetBindingFlags(String^ member);
     Type^                       GetType(String^ assemblyQualifiedTypeName);
+    SV*                         MakeSV(Object^ value);
     void                        SvSetInstance(SV* sv, Object^ value);
     Object^                     SvGetInstance(SV* sv);
     void                        SvSetReturn(SV* sv, Object^ value);
@@ -37,6 +40,8 @@ namespace XS {
     Object^                     InvokeMember(Object^ target, String^ tname, String^ name, Reflection::BindingFlags flags, array<Object^>^ params);
     Reflection::MethodInfo^     CreateInstanceMethodInfo(String^ tname, String^ name, array<String^>^ paramTypeNames);
     Object^                     InvokeMethodInfo(Object^ methodInfo, Object^ instance, array<Object^>^ params);
+    SV*                         MakeShallowHashCopy(Object^ obj);
+    SV*                         MakeShallowHashCopy(Object^ obj, XS::PropertyCollection^ propertyCollection);
 
     ref class BindingFlagsCache {
     public:
@@ -58,6 +63,18 @@ namespace XS {
         static Reflection::BindingFlags StaticSetValueBindingFlags;
     };
 
+    ref class StringUtil {
+    public:
+        static StringUtil() {
+            Encoding = gcnew Text::UTF8Encoding();
+        }
+
+        static Text::UTF8Encoding^ Encoding;
+
+        static array<Byte>^ GetBytes(String^ str) {
+            return Encoding->GetBytes(str);
+        }
+    };
 
     ref class SvPointer {
 
@@ -126,6 +143,50 @@ namespace XS {
         }
 
     }
+
+    ref class PropertyCollection {
+    public:
+         PropertyCollection(Type^ type) {
+            auto flags = XS::BindingFlagsCache::InstanceGetPropertyBindingFlags;
+            if (type->IsInterface) {
+                auto propertyList = gcnew System::Collections::Generic::List<System::Reflection::PropertyInfo^>();
+                auto interfaceList = gcnew System::Collections::Generic::List<Type^>();
+                interfaceList->Add(type);
+                interfaceList->AddRange(type->GetInterfaces());
+                for each (auto interfaceType in interfaceList) {
+                    propertyList->AddRange(interfaceType->GetProperties(flags));
+                }
+
+                _propertyInfos = propertyList->ToArray();
+            } else {
+                _propertyInfos = type->GetProperties(flags);
+            }
+            _propertyNameByteArrays = gcnew array<array<Byte>^>(_propertyInfos->Length);
+
+            size_t propertyIndex = 0;
+            for each (System::Reflection::PropertyInfo^ propertyInfo in _propertyInfos) {
+                String^ propertyName = propertyInfo->Name;
+                _propertyNameByteArrays[propertyIndex] = StringUtil::GetBytes(propertyName);
+                propertyIndex++;
+             }
+         }
+
+         size_t GetLength() {
+            return _propertyInfos->Length;
+         }
+
+         Object^ GetPropertyValue(Object^ instance, size_t propertyIndex) {
+            return _propertyInfos[propertyIndex]->GetMethod->Invoke(instance, nullptr);
+         }
+
+         array<Byte>^ GetPropertyName(size_t propertyIndex) {
+            return _propertyNameByteArrays[propertyIndex];
+         }
+
+     private:
+        array<System::Reflection::PropertyInfo^>^ _propertyInfos;
+        array<array<Byte>^>^ _propertyNameByteArrays;
+    };
 
     ref class Binder: public Reflection::Binder {
 
@@ -755,10 +816,8 @@ namespace XS {
 
     void SvSetString(SV* sv, String^ value) {
 
-        Text::UTF8Encoding^ utf8_enc;
         array<Byte>^ utf8_bytes;
-        utf8_enc   = gcnew Text::UTF8Encoding();
-        utf8_bytes = utf8_enc->GetBytes( value->ToString() );
+        utf8_bytes = StringUtil::GetBytes( value->ToString() );
 
         if (0 < utf8_bytes->Length) {
             pin_ptr<Byte> utf8_ptr = &utf8_bytes[0];
@@ -776,8 +835,7 @@ namespace XS {
             return nullptr;
         }
         else if ( SvUTF8(sv) ) {
-            Text::UTF8Encoding^ utf8_enc = gcnew Text::UTF8Encoding();
-            return gcnew String( SvPV_nolen(sv), 0, SvCUR(sv), utf8_enc );
+            return gcnew String( SvPV_nolen(sv), 0, SvCUR(sv), StringUtil::Encoding );
         }
         else {
             IntPtr pv_ptr = static_cast<IntPtr>( SvPV_nolen(sv) );
@@ -830,6 +888,13 @@ namespace XS {
         */
 
         return gcnew SvPointer(sv);
+    }
+
+    SV* MakeSV(Object^ obj) {
+        // Initialize with size 0 because SvSetReturn will mutate it to contain whatever value is suitable
+        SV* result = newSV(0);
+        XS::SvSetReturn(result, obj);
+        return result;
     }
 
     void SvSetInstance(SV* sv, Object^ value) {
@@ -1122,6 +1187,29 @@ namespace XS {
         return params[0]->GetType()->InvokeMember(name, flags, gcnew XS::Binder(), nullptr, params);
     }
 
+    SV* MakeShallowHashCopy(Object^ obj) {
+        PropertyCollection^ propertyCollection = gcnew PropertyCollection(obj->GetType());
+        return MakeShallowHashCopy(obj, propertyCollection);
+    }
+
+    SV* MakeShallowHashCopy(Object^ obj, PropertyCollection^ propertyCollection) {
+        HV* resultHash = newHV();
+        for (size_t i = 0; i < propertyCollection->GetLength(); i++) {
+            array<Byte>^ propertyNameBytes = propertyCollection->GetPropertyName(i);
+            Object^ propertyValue = propertyCollection->GetPropertyValue(obj, i);
+
+            pin_ptr<Byte> utf8_ptr = &propertyNameBytes[0];
+            const char* propertyNamePtr = reinterpret_cast<char*>(utf8_ptr);
+            U32 propertyNameLength = propertyNameBytes->Length;
+
+            SV* perlValue = XS::MakeSV(propertyValue);
+            hv_store(resultHash, propertyNamePtr, propertyNameLength, perlValue, 0);
+        }
+
+        SV* resultHashReference = newRV_noinc((SV*)resultHash);
+        return resultHashReference;
+    }
+    
 }
 
 MODULE = Win32::CLR    PACKAGE = Win32::CLR
@@ -1343,8 +1431,7 @@ CODE:
         {
             for each (Object^ member in enumerable) {
                 // Initialize with size 0 because SvSetReturn will mutate it to contain whatever value is suitable
-                SV* perlMember = newSV(0);
-                XS::SvSetReturn(perlMember, member);
+                SV* perlMember = XS::MakeSV(member);
                 av_push(perlArrayResult, perlMember);
             }
         }
@@ -1359,36 +1446,48 @@ OUTPUT:
    RETVAL
 
 SV*
-_make_hash_shallow(Win32_CLR self)
+_enumerate_to_shallow_hash_array(Win32_CLR self)
 PREINIT:
-    HV* resultHash;
+    AV* perlArrayResult;
 CODE:
     try {
-        resultHash = newHV();
-        RETVAL = newRV_noinc((SV*)resultHash);
+        // Props to https://stackoverflow.com/a/46719397 for helpful commentary on returning an array
+        perlArrayResult = newAV();
+        RETVAL = newRV_noinc((SV*)perlArrayResult);
 
-        auto type = self->GetType();
-        auto flags = XS::BindingFlagsCache::InstanceGetPropertyBindingFlags;
-        array<System::Reflection::PropertyInfo^>^ publicProperties = type->GetProperties(flags);
-
-        // TODO: extract common utility function for String^ -> char* conversion
-        Text::UTF8Encoding^ utf8_enc;
-        utf8_enc = gcnew Text::UTF8Encoding();
-
-        for each (System::Reflection::PropertyInfo^ propertyInfo in publicProperties) {
-            String^ propertyName = propertyInfo->Name;
-            Object^ propertyValue = propertyInfo->GetMethod->Invoke(self, nullptr);
-
-            SV* perlValue = newSV(0);
-            XS::SvSetReturn(perlValue, propertyValue);
-
-            array<Byte>^ utf8_bytes = utf8_enc->GetBytes(propertyName->ToString());
-            pin_ptr<Byte> utf8_ptr = &utf8_bytes[0];
-            const char* propertyNamePtr = reinterpret_cast<char*>(utf8_ptr);
-            U32 propertyNameLength = utf8_bytes->Length;
-
-            hv_store(resultHash, propertyNamePtr, propertyNameLength, perlValue, 0);
+        Type^ type = self->GetType();
+        Type^ ienumerableType = type->GetInterface("IEnumerable`1");
+        if (ienumerableType == nullptr) {
+            // TODO: error
         }
+
+        Type^ memberType = ienumerableType->GenericTypeArguments[0];
+
+        System::Collections::IEnumerable^ enumerable = static_cast<System::Collections::IEnumerable^>(self);
+        XS::PropertyCollection^ propertyCollection = gcnew XS::PropertyCollection(memberType);
+
+        if (enumerable != nullptr)
+        {
+            for each (Object^ member in enumerable) {
+                SV* objectHash = XS::MakeShallowHashCopy(member, propertyCollection);
+                av_push(perlArrayResult, objectHash);
+            }
+        }
+    }
+    catch (Exception^ ex) {
+        SV* err;
+        err = get_sv("@", TRUE);
+        XS::SvSetInstance(err, ex);
+        croak(NULL);
+    }
+OUTPUT:
+   RETVAL
+
+SV*
+_make_hash_shallow(Win32_CLR self)
+CODE:
+    try {
+        RETVAL = XS::MakeShallowHashCopy(self);
     }
     catch (Exception^ ex) {
         SV* err;
