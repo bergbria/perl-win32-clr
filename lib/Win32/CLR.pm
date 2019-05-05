@@ -74,6 +74,12 @@ sub call_method_info {
     return $self->_call_method_info($methodInfo, $instance, @_);
 }
 
+sub enumerate_to_array {
+    my $self = shift;
+
+    return $self->_enumerate_to_array();
+}
+
 sub call_method {
     my $self = shift;
     my $type = ref($self) ? $self->get_qualified_type() : $self->parse_type( shift(@_) );
