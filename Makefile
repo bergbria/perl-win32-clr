@@ -36,8 +36,6 @@ PERL_INSTALL_ROOT = $(PKGPERL)
 PERL_INSTALL_ROOT = c:\perl64
 !ENDIF
 
-!error PERL_INSTALL_ROOT = $(PERL_INSTALL_ROOT)
-
 # These definitions are from config.sh (via d:/nugetcache/.A/Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg/lib/Config.pm).
 # They may have been overridden via Makefile.PL or on the command line.
 AR = lib
