@@ -1333,19 +1333,27 @@ _enumerate_to_array(Win32_CLR self)
 PREINIT:
     AV* perlArrayResult;
 CODE:
-    // Props to https://stackoverflow.com/a/46719397 for helpful commentary on returning an array
-    perlArrayResult = newAV();
-    RETVAL = newRV_noinc((SV*)perlArrayResult);
+    try {
+        // Props to https://stackoverflow.com/a/46719397 for helpful commentary on returning an array
+        perlArrayResult = newAV();
+        RETVAL = newRV_noinc((SV*)perlArrayResult);
 
-    System::Collections::IEnumerable^ enumerable = static_cast<System::Collections::IEnumerable^>(self);
-    if (enumerable != nullptr)
-    {
-        for each (Object^ member in enumerable) {
-            // Initialize with size 0 because SvSetReturn will mutate it to contain whatever value is suitable
-            SV* perlMember = newSV(0);
-            XS::SvSetReturn(perlMember, member);
-            av_push(perlArrayResult, perlMember);
+        System::Collections::IEnumerable^ enumerable = static_cast<System::Collections::IEnumerable^>(self);
+        if (enumerable != nullptr)
+        {
+            for each (Object^ member in enumerable) {
+                // Initialize with size 0 because SvSetReturn will mutate it to contain whatever value is suitable
+                SV* perlMember = newSV(0);
+                XS::SvSetReturn(perlMember, member);
+                av_push(perlArrayResult, perlMember);
+            }
         }
+    }
+    catch (Exception^ ex) {
+        SV* err;
+        err = get_sv("@", TRUE);
+        XS::SvSetInstance(err, ex);
+        croak(NULL);
     }
 OUTPUT:
    RETVAL
