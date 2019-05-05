@@ -31,3 +31,8 @@ _ReSharper*/
 #Nuget packages folder
 packages/
 blib/*
+*.c
+*.def
+*.old
+pm*
+*.bs
