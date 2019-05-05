@@ -85,6 +85,12 @@ sub call_method_info {
     return $self->_call_method_info($methodInfo, $instance, @_);
 }
 
+sub dictionary_to_hash {
+    my $self = shift;
+
+    return $self->_dictionary_to_hash();
+}
+
 sub enumerate_to_array {
     my $self = shift;
 

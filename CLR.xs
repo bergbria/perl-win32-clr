@@ -1498,6 +1498,45 @@ CODE:
 OUTPUT:
    RETVAL
 
+
+SV*
+_dictionary_to_hash(Win32_CLR self)
+CODE:
+    try {
+        Type^ type = self->GetType();
+        Type^ dictionaryInterface = type->GetInterface("IDictionary`2");
+        if (dictionaryInterface == nullptr) {
+            // TODO: error
+        }
+
+        String^ keyTypeName = dictionaryInterface->GenericTypeArguments[0]->Name;
+        if (!keyTypeName->Equals("System.String")) {
+            // TODO: error
+        }
+
+        HV* resultHash = newHV();
+        auto dictionary = static_cast<System::Collections::IDictionary^>(self);
+        for each (System::Collections::DictionaryEntry^ entry in dictionary) {
+            auto keyBytes = XS::StringUtil::GetBytes(static_cast<String^>(entry->Key));
+            pin_ptr<Byte> utf8_ptr = &keyBytes[0];
+            const char* keyPtr = reinterpret_cast<char*>(utf8_ptr);
+
+            SV* value = XS::MakeSV(entry->Value);
+            hv_store(resultHash, keyPtr, keyBytes->Length, value, 0);
+        }
+
+        SV* resultHashReference = newRV_noinc((SV*)resultHash);
+        RETVAL = resultHashReference;
+    }
+    catch (Exception^ ex) {
+        SV* err;
+        err = get_sv("@", TRUE);
+        XS::SvSetInstance(err, ex);
+        croak(NULL);
+    }
+OUTPUT:
+   RETVAL
+
 CLR_Object
 load(SV* package, CLR_String name)
 CODE:
