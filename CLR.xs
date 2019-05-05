@@ -1157,7 +1157,7 @@ namespace XS {
     }
 
     Object^ InvokeMember(Object^ target, String^ tname, String^ name, Reflection::BindingFlags flags, array<Object^>^ params) {
-        Type^ type = XS::GetType(tname);
+        Type^ type = target == nullptr ? XS::GetType(tname) : target->GetType();
         return type->InvokeMember(name, flags, gcnew XS::Binder(), target, params);
     }
 

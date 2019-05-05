@@ -8,26 +8,37 @@ BEGIN {
     require XSLoader;
     XSLoader::load(__PACKAGE__, $VERSION);
 
-    my @methods = qw(
-        get_field       set_field
-        get_property    set_property
-        get_value       set_value
-        add_event       remove_event
-        has_member      create_instance
-        create_delegate create_enum
-        create_array
+    my %methodToAlwaysRequiresTypeName= (
+        "get_field" => 0,
+        "set_field" => 0,
+        "get_property" => 0,
+        "set_property" => 0,
+        "get_value" => 0,
+        "set_value" => 0,
+        "add_event" => 1,
+        "remove_event" => 1,
+        "has_member" => 1,
+        "create_instance" => 1,
+        "create_delegate" => 1,
+        "create_enum" => 1,
+        "create_array" => 1,
     );
 
-    foreach my $method (@methods) {
+    foreach my $method (keys %methodToAlwaysRequiresTypeName) {
         no strict "refs";
         my $call = "_" . $method;
+        my $requiresTypeName = $methodToAlwaysRequiresTypeName{$method};
         *{$method} = sub {
             my $self = shift;
-            my $type = ref($self) ? $self->get_qualified_type() : $self->parse_type( shift(@_) );
+            my $type;
+            if (ref($self)) {
+                $type = $requiresTypeName ? $self->get_qualified_type() : undef;
+             } else {
+                $type = $self->parse_type( shift(@_) );
+            }
             return $self->$call($type, @_);
         };
     }
-
 }
 
 use overload
@@ -94,16 +105,26 @@ sub make_hash_shallow {
 
 sub call_method {
     my $self = shift;
-    my $type = ref($self) ? $self->get_qualified_type() : $self->parse_type( shift(@_) );
+    my $rawType = ref($self) ? undef : shift;
     my ($method, @generic) = $self->parse_method( shift(@_) );
 
     if (@generic) {
+        my $type = ref($self) ? $self->get_qualified_type() : $self->parse_type( $rawType );
         return $self->_call_generic_method($type, $method, \@generic, @_);
     }
     else {
+        my $type = ref($self) ? undef : $self->parse_type( $rawType );
         return $self->_call_method($type, $method, @_);
     }
+}
 
+# If you know the method you're calling is not generic, this will yield better performance than call_method
+sub call_non_generic_method {
+    my $self = shift;
+    my $type = ref($self) ? undef : $self->parse_type(shift(@_));
+    my $method = shift;
+
+    return $self->_call_method($type, $method, @_);
 }
 
 sub derived_from {
