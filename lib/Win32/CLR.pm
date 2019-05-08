@@ -69,20 +69,20 @@ sub parse_method {
     return Win32::CLR::Parser->parse_method($method);
 }
 
-sub bind_method_info {
+sub bind_method {
     my $self = shift;
     my $type = $self->parse_type( shift(@_));
     my $methodName = shift;
     my @paramTypes = map {$self->parse_type($_)} @_;
-    return $self->_bind_method_info($type, $methodName, @paramTypes);
+    return $self->_bind_method($type, $methodName, @paramTypes);
 }
 
-sub call_method_info {
+sub call_bound_method {
     my $self = shift;
     my $methodInfo = shift;
     my $instance = shift;
 
-    return $self->_call_method_info($methodInfo, $instance, @_);
+    return $self->_call_bound_method($methodInfo, $instance, @_);
 }
 
 sub dictionary_to_hash {
@@ -92,33 +92,21 @@ sub dictionary_to_hash {
 }
 
 sub enumerate_to_array {
-    my $self = shift;
+    my ($self, $deep, $useEnumerableType) = @_;
 
-    return $self->_enumerate_to_array();
+    return $self->_enumerate_to_array($deep, $useEnumerableType);
 }
 
-sub make_deep_copy {
-    my $self = shift;
+sub clone {
+    my ($self, $deep) = @_;
 
-    return $self->_enumerate_to_array();
+    return $self->_clone($deep);
 }
 
 sub enumerate_to_shallow_hash_array {
     my $self = shift;
 
     return $self->_enumerate_to_shallow_hash_array();
-}
-
-sub make_hash_shallow {
-    my $self = shift;
-
-    return $self->_make_hash_shallow();
-}
-
-sub make_deep_perl_copy {
-    my $self = shift;
-
-    return $self->_make_deep_perl_copy();
 }
 
 sub call_method {

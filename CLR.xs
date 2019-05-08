@@ -41,9 +41,12 @@ namespace XS {
     Object^                     InvokeMember(Object^ target, String^ tname, String^ name, Reflection::BindingFlags flags, array<Object^>^ params);
     Reflection::MethodInfo^     CreateInstanceMethodInfo(String^ tname, String^ name, array<String^>^ paramTypeNames);
     Object^                     InvokeMethodInfo(Object^ methodInfo, Object^ instance, array<Object^>^ params);
-    SV*                         MakeShallowHashCopy(Object^ obj);
-    SV*                         MakeShallowHashCopy(Object^ obj, XS::PropertyCollection^ propertyCollection);
-    SV*                         MakeDeepPerlCopy(Object^ obj);
+    SV*                         MakeHashFromObject(Object^ obj, bool deep);
+    SV*                         MakeHashFromObject(Object^ obj, XS::PropertyCollection^ propertyCollection, bool deep);
+    SV*                         MakePerlCopy(Object^ obj, bool deep);
+    SV*                         MakePerlCopy(Object^ obj, bool deep, Type^ typeOverride);
+    SV*                         EnumerateToArray(System::Collections::IEnumerable^ enumerable, Type^ elementType, bool deep, bool useEnumerableType);
+    SV*                         MakeHashFromDictionary(System::Collections::IDictionary^ dictionary, bool deep);
 
     ref class BindingFlagsCache {
     public:
@@ -1232,12 +1235,20 @@ namespace XS {
         return params[0]->GetType()->InvokeMember(name, flags, gcnew XS::Binder(), nullptr, params);
     }
 
-    SV* MakeShallowHashCopy(Object^ obj) {
-        PropertyCollection^ propertyCollection = gcnew PropertyCollection(obj->GetType());
-        return MakeShallowHashCopy(obj, propertyCollection);
+    SV* MakeHashFromObject(Object^ obj, bool deep) {
+        if (obj == nullptr) {
+            return NULL;
+        }
+
+        PropertyCollection^ propertyCollection = PropertyCollection::Get(obj->GetType());
+        return MakeHashFromObject(obj, propertyCollection, deep);
     }
 
-    SV* MakeShallowHashCopy(Object^ obj, PropertyCollection^ propertyCollection) {
+    SV* MakeHashFromObject(Object^ obj, PropertyCollection^ propertyCollection, bool deep) {
+        if (obj == nullptr) {
+            return NULL;
+        }
+
         HV* resultHash = newHV();
         for (size_t i = 0; i < propertyCollection->GetLength(); i++) {
             array<Byte>^ propertyNameBytes = propertyCollection->GetPropertyNameBytes(i);
@@ -1247,7 +1258,7 @@ namespace XS {
             const char* propertyNamePtr = reinterpret_cast<char*>(utf8_ptr);
             U32 propertyNameLength = propertyNameBytes->Length;
 
-            SV* perlValue = XS::MakeSV(propertyValue);
+            SV* perlValue = deep ? MakePerlCopy(propertyValue, true) : XS::MakeSV(propertyValue);
             hv_store(resultHash, propertyNamePtr, propertyNameLength, perlValue, 0);
         }
 
@@ -1255,67 +1266,84 @@ namespace XS {
         return resultHashReference;
     }
 
+    SV* EnumerateToArray(System::Collections::IEnumerable^ enumerable, bool deep, bool useEnumerableType) {
+        if (enumerable == nullptr) {
+            return NULL;
+        }
+
+        Type^ memberTypeOverride = nullptr;
+        if (deep && useEnumerableType) {
+            Type^ ienumerableType = enumerable->GetType()->GetInterface("IEnumerable`1");
+            if (ienumerableType == nullptr) {
+                // TODO: error
+            }
+
+            memberTypeOverride = ienumerableType->GenericTypeArguments[0];
+        }
+
+        auto perlArrayResult = newAV();
+        for each (Object^ member in enumerable) {
+            SV* element = deep ? MakePerlCopy(member, true, memberTypeOverride) : XS::MakeSV(member);
+            av_push(perlArrayResult, element);
+        }
+        return newRV_noinc((SV*)perlArrayResult);
+    }
+
+    SV* MakeHashFromDictionary(System::Collections::IDictionary^ dictionary, bool deep) {
+        if (dictionary == nullptr) {
+            return NULL;
+        }
+
+        HV* resultHash = newHV();
+        if (dictionary->Count > 0) {
+            Type^ dictionaryInterface = dictionary->GetType()->GetInterface("IDictionary`2");
+            if (dictionaryInterface == nullptr) {
+                // TODO: error
+            }
+
+            String^ keyTypeName = dictionaryInterface->GenericTypeArguments[0]->Name;
+            if (!keyTypeName->Equals("System.String")) {
+                // TODO: error
+            }
+
+            for each (System::Collections::DictionaryEntry^ entry in dictionary) {
+                auto keyBytes = XS::StringUtil::GetBytes(static_cast<String^>(entry->Key));
+                pin_ptr<Byte> utf8_ptr = &keyBytes[0];
+                const char* keyPtr = reinterpret_cast<char*>(utf8_ptr);
+
+                SV* value = deep ? MakePerlCopy(entry->Value, true) : XS::MakeSV(entry->Value);
+                hv_store(resultHash, keyPtr, keyBytes->Length, value, 0);
+            }
+        }
+
+        return newRV_noinc((SV*)resultHash);
+    }
+
+    SV* MakePerlCopy(Object^ obj, bool deep) {
+        return MakePerlCopy(obj, deep, nullptr);
+    }
+
     // TODO: there's too much duplicated code in this function
-    SV* MakeDeepPerlCopy(Object^ obj) {
+    SV* MakePerlCopy(Object^ obj, bool deep, Type^ typeOverride) {
         if (IsConvertibleToNativePerlType(obj)) {
             return XS::MakeSV(obj);
         }
 
-        Type^ type = obj->GetType();
-
         auto dictionary = dynamic_cast<System::Collections::IDictionary^>(obj);
         if (dictionary != nullptr) {
-            HV* resultHash = newHV();
-            if (dictionary->Count > 0) {
-                Type^ dictionaryInterface = type->GetInterface("IDictionary`2");
-                if (dictionaryInterface == nullptr) {
-                    // TODO: error
-                }
-
-                String^ keyTypeName = dictionaryInterface->GenericTypeArguments[0]->Name;
-                if (!keyTypeName->Equals("System.String")) {
-                    // TODO: error
-                }
-
-                for each (System::Collections::DictionaryEntry^ entry in dictionary) {
-                    auto keyBytes = XS::StringUtil::GetBytes(static_cast<String^>(entry->Key));
-                    pin_ptr<Byte> utf8_ptr = &keyBytes[0];
-                    const char* keyPtr = reinterpret_cast<char*>(utf8_ptr);
-
-                    SV* value = MakeDeepPerlCopy(entry->Value);
-                    hv_store(resultHash, keyPtr, keyBytes->Length, value, 0);
-                }
-            }
-
-            return newRV_noinc((SV*)resultHash);
+            return MakeHashFromDictionary(dictionary, deep);
         }
 
         auto enumerable = dynamic_cast<System::Collections::IEnumerable^>(obj);
         if (enumerable != nullptr) {
-            auto perlArrayResult = newAV();
-            for each (Object^ member in enumerable) {
-                SV* element = MakeDeepPerlCopy(member);
-                av_push(perlArrayResult, element);
-            }
-            return newRV_noinc((SV*)perlArrayResult);
+            return EnumerateToArray(enumerable, deep, false);
         }
 
-        // This is another object
-        HV* resultHash = newHV();
-        auto propertyCollection = PropertyCollection::Get(type);
-        for (size_t i = 0; i < propertyCollection->GetLength(); i++) {
-            array<Byte>^ propertyNameBytes = propertyCollection->GetPropertyNameBytes(i);
-            Object^ propertyValue = propertyCollection->GetPropertyValue(obj, i);
-
-            pin_ptr<Byte> utf8_ptr = &propertyNameBytes[0];
-            const char* propertyNamePtr = reinterpret_cast<char*>(utf8_ptr);
-            U32 propertyNameLength = propertyNameBytes->Length;
-
-            SV* perlValue = MakeDeepPerlCopy(propertyValue);
-            hv_store(resultHash, propertyNamePtr, propertyNameLength, perlValue, 0);
+        if (typeOverride == nullptr) {
+            return MakeHashFromObject(obj, deep);
         }
 
-        return newRV_noinc((SV*)resultHash);
+        return MakeHashFromObject(obj, PropertyCollection::Get(typeOverride), deep);
     }
 }
 
@@ -1361,7 +1389,7 @@ OUTPUT:
     RETVAL
 
 CLR_Object
-_bind_method_info(Win32_CLR self, CLR_String tname, CLR_String name, CLR_StringParam3 params = nullptr, ...)
+_bind_method(Win32_CLR self, CLR_String tname, CLR_String name, CLR_StringParam3 params = nullptr, ...)
 CODE:
     try {
         RETVAL = XS::CreateInstanceMethodInfo(tname, name, params);
@@ -1376,7 +1404,7 @@ OUTPUT:
     RETVAL
 
 CLR_Object
-_call_method_info(Win32_CLR methodInfo, Win32_CLR instance, CLR_Param2 params = nullptr, ...)
+_call_bound_method(Win32_CLR methodInfo, Win32_CLR instance, CLR_Param2 params = nullptr, ...)
 CODE:
     try {
         RETVAL = XS::InvokeMethodInfo(methodInfo, instance, params);
@@ -1524,22 +1552,11 @@ OUTPUT:
     RETVAL
 
 SV*
-_enumerate_to_array(Win32_CLR self)
-PREINIT:
-    AV* perlArrayResult;
+_enumerate_to_array(Win32_CLR self, Boolean deep, Boolean useEnumerableType)
 CODE:
     try {
-        perlArrayResult = newAV();
-        RETVAL = newRV_noinc((SV*)perlArrayResult);
-
-        System::Collections::IEnumerable^ enumerable = static_cast<System::Collections::IEnumerable^>(self);
-        if (enumerable != nullptr)
-        {
-            for each (Object^ member in enumerable) {
-                SV* perlMember = XS::MakeSV(member);
-                av_push(perlArrayResult, perlMember);
-            }
-        }
+        System::Collections::IEnumerable^ enumerable = dynamic_cast<System::Collections::IEnumerable^>(self);
+        RETVAL = XS::EnumerateToArray(enumerable, deep, useEnumerableType);
     }
     catch (Exception^ ex) {
         SV* err;
@@ -1550,11 +1567,13 @@ CODE:
 OUTPUT:
    RETVAL
 
+
 SV*
 _enumerate_to_shallow_hash_array(Win32_CLR self)
 PREINIT:
     AV* perlArrayResult;
 CODE:
+    // TODO: this function could be merged with _enumerate_to_array if we added more granular depth configuration than all-or-nothing
     try {
         perlArrayResult = newAV();
         RETVAL = newRV_noinc((SV*)perlArrayResult);
@@ -1567,13 +1586,13 @@ CODE:
 
         Type^ memberType = ienumerableType->GenericTypeArguments[0];
 
-        System::Collections::IEnumerable^ enumerable = static_cast<System::Collections::IEnumerable^>(self);
+        System::Collections::IEnumerable^ enumerable = dynamic_cast<System::Collections::IEnumerable^>(self);
         XS::PropertyCollection^ propertyCollection = gcnew XS::PropertyCollection(memberType);
 
         if (enumerable != nullptr)
         {
             for each (Object^ member in enumerable) {
-                SV* objectHash = XS::MakeShallowHashCopy(member, propertyCollection);
+                SV* objectHash = XS::MakeHashFromObject(member, propertyCollection, false);
                 av_push(perlArrayResult, objectHash);
             }
         }
@@ -1588,25 +1607,10 @@ OUTPUT:
    RETVAL
 
 SV*
-_make_hash_shallow(Win32_CLR self)
+_clone(Win32_CLR self, Boolean deep)
 CODE:
     try {
-        RETVAL = XS::MakeShallowHashCopy(self);
-    }
-    catch (Exception^ ex) {
-        SV* err;
-        err = get_sv("@", TRUE);
-        XS::SvSetInstance(err, ex);
-        croak(NULL);
-    }
-OUTPUT:
-   RETVAL
-
-SV*
-_make_deep_perl_copy(Win32_CLR self)
-CODE:
-    try {
-        RETVAL = XS::MakeDeepPerlCopy(self);
+        RETVAL = XS::MakePerlCopy(self, deep);
     }
     catch (Exception^ ex) {
         SV* err;
@@ -1621,30 +1625,8 @@ SV*
 _dictionary_to_hash(Win32_CLR self)
 CODE:
     try {
-        Type^ type = self->GetType();
-        Type^ dictionaryInterface = type->GetInterface("IDictionary`2");
-        if (dictionaryInterface == nullptr) {
-            // TODO: error
-        }
-
-        String^ keyTypeName = dictionaryInterface->GenericTypeArguments[0]->Name;
-        if (!keyTypeName->Equals("System.String")) {
-            // TODO: error
-        }
-
-        HV* resultHash = newHV();
-        auto dictionary = static_cast<System::Collections::IDictionary^>(self);
-        for each (System::Collections::DictionaryEntry^ entry in dictionary) {
-            auto keyBytes = XS::StringUtil::GetBytes(static_cast<String^>(entry->Key));
-            pin_ptr<Byte> utf8_ptr = &keyBytes[0];
-            const char* keyPtr = reinterpret_cast<char*>(utf8_ptr);
-
-            SV* value = XS::MakeSV(entry->Value);
-            hv_store(resultHash, keyPtr, keyBytes->Length, value, 0);
-        }
-
-        SV* resultHashReference = newRV_noinc((SV*)resultHash);
-        RETVAL = resultHashReference;
+        auto dictionary = dynamic_cast<System::Collections::IDictionary^>(self);
+        RETVAL = XS::MakeHashFromDictionary(dictionary, false);
     }
     catch (Exception^ ex) {
         SV* err;
