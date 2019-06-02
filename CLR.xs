@@ -1170,7 +1170,7 @@ namespace XS {
         dyn_method_il = dyn_method->GetILGenerator(256);
         deleg_param   = dyn_method_il->DeclareLocal( Type::GetType("System.Object[]") );
 
-        dyn_method_il->Emit(Reflection::Emit::OpCodes::Ldc_I4, param_types->Length);
+        dyn_method_il->Emit(Reflection::Emit::OpCodes::Ldc_I4, param_types->Length - 1);
         dyn_method_il->Emit(Reflection::Emit::OpCodes::Newarr, Object::typeid);
         dyn_method_il->Emit(Reflection::Emit::OpCodes::Stloc, deleg_param);
 
