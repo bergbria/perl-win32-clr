@@ -855,6 +855,14 @@ namespace XS {
     }
 
     String^ SvToString(SV* sv) {
+        
+        // A number of perl objects can be 'magical' and have a special getter associated with them.
+        // This is commonly used for e.g. delayed evaluation, TIEs, and regexes.
+        // If the object is magical, we need to invoke that getter before we can reason further about the object itself.
+        if (SvMAGICAL(sv)) {
+            mg_get(sv);
+        }
+
         if ( !SvOK(sv) ) {
             return nullptr;
         }
@@ -868,6 +876,13 @@ namespace XS {
     }
 
     array<Object^>^ SvToArray(SV* sv) {
+
+        // A number of perl objects can be 'magical' and have a special getter associated with them.
+        // This is commonly used for e.g. delayed evaluation, TIEs, and regexes.
+        // If the object is magical, we need to invoke that getter before we can reason further about the object itself.
+        if (SvMAGICAL(sv)) {
+            mg_get(sv);
+        }
 
         AV* av = reinterpret_cast<AV*>( SvRV(sv) );
         int length = av_len(av) + 1;
@@ -888,6 +903,13 @@ namespace XS {
     }
 
     Object^ SvGetInstance(SV* sv) {
+        
+        // A number of perl objects can be 'magical' and have a special getter associated with them.
+        // This is commonly used for e.g. delayed evaluation, TIEs, and regexes.
+        // If the object is magical, we need to invoke that getter before we can reason further about the object itself.
+        if (SvMAGICAL(sv)) {
+            mg_get(sv);
+        }
 
         if ( !SvOK(sv) ) {
             return nullptr;
@@ -1768,12 +1790,20 @@ OUTPUT:
 CLR_String
 get_qualified_type(Win32_CLR self, CLR_String tname = nullptr)
 CODE:
-    Type^ type = (nullptr == self ? XS::GetType(tname) : self->GetType() );
-    if (nullptr == type) {
-        XSRETURN_UNDEF;
+    try {
+        Type^ type = (nullptr == self ? XS::GetType(tname) : self->GetType() );
+        if (nullptr == type) {
+            XSRETURN_UNDEF;
+        }
+        else {
+            RETVAL = type->AssemblyQualifiedName;
+        }
     }
-    else {
-        RETVAL = type->AssemblyQualifiedName;
+    catch (Exception^ ex) {
+        SV* err;
+        err = get_sv("@", TRUE);
+        XS::SvSetInstance(err, ex);
+        croak(NULL);
     }
 OUTPUT:
     RETVAL

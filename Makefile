@@ -36,7 +36,7 @@ PERL_INSTALL_ROOT = $(PKGPERL)
 PERL_INSTALL_ROOT = c:\perl64
 !ENDIF
 
-# These definitions are from config.sh (via d:/nugetcache/.A/Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg/lib/Config.pm).
+# These definitions are from config.sh (via $(PERL_INSTALL_ROOT)/lib/Config.pm).
 # They may have been overridden via Makefile.PL or on the command line.
 AR = lib
 CC = cl -clr -TP
@@ -132,16 +132,16 @@ INSTALLSITEHTMLDIR = $(PERL_INSTALL_ROOT)\html
 DESTINSTALLSITEHTMLDIR = $(DESTDIR)$(INSTALLSITEHTMLDIR)
 INSTALLVENDORHTMLDIR = $(PERL_INSTALL_ROOT)\html
 DESTINSTALLVENDORHTMLDIR = $(DESTDIR)$(INSTALLVENDORHTMLDIR)
-PERL_LIB = d:/nugetcache/.A/Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg/lib
-PERL_ARCHLIB = d:/nugetcache/.A/Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg/lib
+PERL_LIB = $(PERL_INSTALL_ROOT)/lib
+PERL_ARCHLIB = $(PERL_INSTALL_ROOT)/lib
 LIBPERL_A = libperl.lib
 FIRST_MAKEFILE = Makefile
 MAKEFILE_OLD = Makefile.old
 MAKE_APERL_FILE = Makefile.aperl
 PERLMAINCC = $(CC)
-PERL_INC = D:\nugetcache\.A\Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg\lib\CORE
-PERL = D:\nugetcache\.A\Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg\bin\perl.exe
-FULLPERL = D:\nugetcache\.A\Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg\bin\perl.exe
+PERL_INC = $(PERL_INSTALL_ROOT)\lib\CORE
+PERL = $(PERL_INSTALL_ROOT)\bin\perl.exe
+FULLPERL = $(PERL_INSTALL_ROOT)\bin\perl.exe
 ABSPERL = $(PERL)
 PERLRUN = $(PERL) "-I$(PERL_LIB)" "-I$(PERL_ARCHLIB)"
 FULLPERLRUN = $(FULLPERL) "-I$(PERL_LIB)" "-I$(PERL_ARCHLIB)"
@@ -154,7 +154,7 @@ PERM_DIR = 755
 PERM_RW = 644
 PERM_RWX = 755
 
-MAKEMAKER   = d:/nugetcache/.A/Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg/lib/ExtUtils/MakeMaker.pm
+MAKEMAKER   = $(PERL_INSTALL_ROOT)/lib/ExtUtils/MakeMaker.pm
 MM_VERSION  = 6.84
 MM_REVISION = 68400
 
@@ -220,12 +220,12 @@ AUTOSPLITFILE = $(ABSPERLRUN)  -e "use AutoSplit;  autosplit($$$$ARGV[0], $$$$AR
 
 # --- MakeMaker tool_xsubpp section:
 
-XSUBPPDIR = D:\nugetcache\.A\Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg\lib\ExtUtils
+XSUBPPDIR = $(PERL_INSTALL_ROOT)\lib\ExtUtils
 XSUBPP = $(XSUBPPDIR)$(DFSEP)xsubpp
 XSUBPPRUN = $(PERLRUN) $(XSUBPP)
 XSPROTOARG = 
-XSUBPPDEPS = D:\nugetcache\.A\Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg\lib\ExtUtils\typemap typemap $(XSUBPP)
-XSUBPPARGS = -noprototypes -typemap D:\nugetcache\.A\Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg\lib\ExtUtils\typemap -typemap typemap
+XSUBPPDEPS = $(PERL_INSTALL_ROOT)\lib\ExtUtils\typemap typemap $(XSUBPP)
+XSUBPPARGS = -noprototypes -typemap $(PERL_INSTALL_ROOT)\lib\ExtUtils\typemap -typemap typemap
 XSUBPP_EXTRA_ARGS =
 
 
@@ -936,7 +936,7 @@ $(FIRST_MAKEFILE) : Makefile.PL $(CONFIGDEP)
 
 # --- MakeMaker makeaperl section ---
 MAP_TARGET    = perl
-FULLPERL      = D:\nugetcache\.A\Perl.ActiveState.KhUceSdg27-VdIS2kG9dDg\bin\perl.exe
+FULLPERL      = $(PERL_INSTALL_ROOT)\bin\perl.exe
 
 $(MAP_TARGET) :: static $(MAKE_APERL_FILE)
 	$(MAKE) $(USEMAKEFILE) $(MAKE_APERL_FILE) $@
