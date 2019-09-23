@@ -1,3 +1,5 @@
+Original CPAN page: https://metacpan.org/pod/Win32::CLR
+
 Win32::CLR version 0.03
 
 Win32::CLR provides utility methods to using Microsoft .NET Framework,
